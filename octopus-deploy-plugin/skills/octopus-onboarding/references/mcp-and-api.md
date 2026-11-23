@@ -1,125 +1,112 @@
 # MCP tools and REST equivalents
 
-This reference accompanies `SKILL.md` (the `octopus-onboarding` skill). It tells the agent which MCP tools to prefer for each onboarding step, which REST endpoints they map to, and how write-gating works in both modes.
+This reference accompanies `SKILL.md` (the `octopus-onboarding` skill). It tells the agent which Remote MCP Server tools to prefer for each onboarding step, which REST endpoints they map to, and which writes need REST.
 
 Read this file once at the start of an onboarding session.
 
 ## Detect transport
 
-The user either has the official Octopus MCP server connected, or they don't.
+The user either has the Octopus Remote MCP Server connected, or they don't.
 
-- **MCP connected** — your tool list includes tools like `list_spaces`, `list_projects`, `find_releases`, `read_resource`, `execute`. Server name is typically `octopus-deploy` or `octopus-deploy-mcp`. Resources under `octopus://...` are dereferenceable.
-- **MCP not connected** — fall back to direct REST against `{serverUrl}` with `X-Octopus-ApiKey: <api-key>` in every request header (or `Authorization: Bearer <token>` if the user is using OAuth-style tokens).
+- **MCP connected** — your tool list includes `find_spaces`, `find_projects`, `search_contracts`, `describe_contract`, `execute_query`, and `execute_command`. The server is named `octopus-deploy-mcp` when it comes from this plugin, and is typically `octopus-deploy` when the user added it themselves.
+- **MCP not connected** — fall back to direct REST against `{serverUrl}` with `X-Octopus-ApiKey: <api-key>` in every request header.
 
-Default when in doubt: probe for `list_spaces` in your available tools. If it's there, MCP is live. If it's not, REST it is.
+Default when in doubt: probe for `find_spaces` in your available tools. If it's there, MCP is live. If it's not, REST it is.
 
 ## The rule
 
-When MCP is connected, **every read flow described in this skill should go through the MCP tool first**. Drop to raw HTTP only when there's no equivalent tool — and even then, prefer the MCP `execute` tool over hand-rolled HTTP, so writes still flow through the gating layer.
+When MCP is connected, **every read flow in this skill goes through MCP**. Writes go through MCP when a command contract exists for them. A few onboarding writes have no contract (see *Writes with no contract*); those use REST with an API key, even when MCP is connected.
 
-When MCP is not connected, use the REST endpoints listed below. Same flow, just one transport instead of two.
+When MCP is not connected, use the REST endpoints listed below.
+
+## How the Remote MCP Server is organized
+
+- **Dedicated tools** appear directly in your tool list: `find_spaces`, `find_projects`, `find_environments`, `find_releases`, `find_deployments`, `find_server_tasks`, `find_runbooks`, `find_tenants`, `find_deployment_targets`, `find_certificates`, `find_accounts`, `find_events`, `get_current_user`, `get_deployment_process`, `get_variables`, `get_branches`, `create_release`, `deploy_release`, `deploy_release_for_tenants`, `run_runbook_in_database`, `run_runbook_in_git`.
+- **Contracts** cover the rest of the API. Find one with `search_contracts` (keyword search, optionally by `Category`), read its input schema with `describe_contract`, then run it with `execute_query` (reads) or `execute_command` (writes), passing the contract name in `Name` and its parameters as a JSON object in `Arguments`.
+- Contracts flagged `IsComplex` are full replacements, not patches: omitted fields are cleared. Read the current state first and resubmit every value with only your changes applied.
+- Contract and parameter names change between Octopus versions. Treat the names below as starting points, and confirm with `describe_contract` before calling one.
 
 ## Tool ↔ REST cross reference
 
 ### Reads — core and discovery
 
-| MCP tool | Equivalent REST | Notes |
+| MCP | Equivalent REST | Notes |
 |---|---|---|
-| `list_spaces` | `GET /api/spaces/all` | Pick a space ID once at session start. |
+| `find_spaces` | `GET /api/spaces/all` | Pick a space ID once at session start. |
 | `get_current_user` | `GET /api/users/me` | Confirms credentials and surfaces permission scope. |
-| `list_environments` | `GET /api/{sp}/environments/all` | |
-| `list_projects` | `GET /api/{sp}/projects/all` (paged) | |
-| `get_deployment_process` | `GET /api/{sp}/deploymentprocesses/{id}` (or `/projects/{id}/deploymentprocesses`) | Supports Config-as-Code projects via `gitRef`. |
-| `get_variables` | `GET /api/{sp}/variables/{variableSetId}` | Returns project + library variable set variables. |
-| `get_branches` | `GET /api/{sp}/projects/{id}/git/branches` | Version-controlled projects only. Min Octopus 2021.2. |
-
-### Reads — find tools (unified ID-or-filter shape)
-
-Each `find_*` tool accepts either an explicit ID (returns one entity) or filter params (returns a slim list with `resourceUri` for follow-up).
-
-| MCP tool | Equivalent REST | Filters |
-|---|---|---|
-| `find_releases` | `GET /api/{sp}/projects/{id}/releases` (list) or `GET /api/{sp}/releases/{id}` (single) | `projectId`, optional `version` |
-| `find_runbooks` | `GET /api/{sp}/runbooks` or `GET /api/{sp}/runbooks/{id}` | `projectId`, optional `name` |
-| `find_tenants` | `GET /api/{sp}/tenants` or `GET /api/{sp}/tenants/{id}` | `name`, `tags`, `projectId` |
-| `find_deployment_targets` | `GET /api/{sp}/machines` or `GET /api/{sp}/machines/{id}` | `name`, `roles`, `healthStatus`, `environmentId`, `commStyle`, `isDisabled` |
-| `find_certificates` | `GET /api/{sp}/certificates` or `GET /api/{sp}/certificates/{id}` | `name`, `archived`, `tenantId` |
-| `find_accounts` | `GET /api/{sp}/accounts` or `GET /api/{sp}/accounts/{id}` | `name`, `accountType` |
-| `find_interruptions` | `GET /api/{sp}/interruptions` or `GET /api/{sp}/interruptions/{id}` | `assignedToMe`, `taskId`, `pendingOnly` |
+| `find_environments` | `GET /api/{sp}/environments/all` | |
+| `find_projects` | `GET /api/{sp}/projects/all` (paged) | |
+| `get_deployment_process` | `GET /api/{sp}/projects/{id}/deploymentprocesses` | Set `GitObject` for Config-as-Code projects. |
+| `get_variables` | `GET /api/{sp}/variables/{variableSetId}` | |
+| `get_branches` | `GET /api/{sp}/projects/{id}/git/branches` | Version-controlled projects only. |
+| `find_releases` | `GET /api/{sp}/projects/{id}/releases` | |
+| `find_runbooks` | `GET /api/{sp}/runbooks` | |
+| `find_tenants` | `GET /api/{sp}/tenants` | |
+| `find_deployment_targets` | `GET /api/{sp}/machines` | |
+| `find_certificates` | `GET /api/{sp}/certificates` | |
+| `find_accounts` | `GET /api/{sp}/accounts` | |
+| `execute_query` `find_feeds` | `GET /api/{sp}/feeds` | |
+| `execute_query` `find_package_versions` | `GET /api/{sp}/feeds/{id}/packages/versions?packageId=...` | |
+| `execute_query` `find_lifecycles` | `GET /api/{sp}/lifecycles` | |
+| `execute_query` `find_tag_sets` | `GET /api/{sp}/tagsets` | |
+| `execute_query` `find_interruptions` | `GET /api/{sp}/interruptions` | Set `PendingOnly`, or `Regarding` to a task ID. |
 
 ### Tasks and logs
 
-| MCP tool | Equivalent REST | Notes |
+| MCP | Equivalent REST | Notes |
 |---|---|---|
-| `grep_task_log` | `GET /api/{sp}/tasks/{id}/details` then client-side grep | GNU-grep-style: `pattern`, `caseInsensitive`, `invertMatch`, `fixedString`, `beforeContext`, `afterContext`, `maxCount`. Activity logs are multi-megabyte; **always prefer `grep_task_log` over fetching the whole log**. |
-| (no MCP equivalent — list deployments) | `GET /api/{sp}/deployments` with filters | Use `list_deployments` if available. |
-| `get_deployment_from_url` | manual ID extraction | Pass a full Octopus deployment URL → returns task ID + `taskResourceUri` + grep hint. |
-| `get_task_from_url` | manual ID extraction | Same shape for task URLs. |
+| `find_server_tasks` | `GET /api/tasks` | Filter by `States`, `Project`, `Environment`, `Active`. |
+| `find_deployments` | `GET /api/{sp}/deployments` | |
+| `execute_query` `get_server_task_log` | `GET /api/{sp}/tasks/{id}/details` then client-side search | Defaults to a failure-focused summary. Set `Mode` to `Search` with `SearchPattern` (regex) and `ContextLines` to search the log. Task logs can be megabytes; **always prefer `get_server_task_log` over fetching the whole log**. |
+| `execute_query` `get_child_server_tasks` | — | For "Deploy a Release" child deployments. |
 
-### Kubernetes live status
-
-| MCP tool | Equivalent REST | Notes |
-|---|---|---|
-| `get_kubernetes_live_status` | `GET /api/{sp}/projects/{id}/kubernetes/live-status?environmentId=...` | Requires Octopus 2025.3+. |
+To get a task ID from an Octopus URL, read it from the URL path (for example `.../tasks/ServerTasks-123`, or the deployment ID in `.../deployments/Deployments-45` passed to `find_deployments`).
 
 ### Tenant variables
 
-| MCP tool | Equivalent REST |
+| MCP | Equivalent REST |
 |---|---|
-| `get_tenant_variables` | `GET /api/{sp}/tenants/{id}/variables[/projects/{projectId}]` |
-| `get_missing_tenant_variables` | `GET /api/{sp}/tenants/variables-missing` |
+| `execute_query` `get_tenant_project_variables` / `get_tenant_common_variables` | `GET /api/{sp}/tenants/{id}/projectvariables`, `/commonvariables` |
+| `execute_query` `get_tenants_missing_variables` | `GET /api/{sp}/tenants/variables-missing` |
 
-### Catalog and capability resources (MCP only)
+### API catalog
 
-These have no clean REST equivalent — the MCP server publishes them as resources under `octopus://api/...`.
+The Remote MCP Server has no API catalog tool. For REST endpoint shapes, step types, and the `Octopus.Action.*` property catalog, use `GET {serverUrl}/api/experimental/llms.txt` with the API key header. The catalog is around 350 KB; save it to a file and search it rather than reading it whole.
 
-| Resource URI | What it returns |
-|---|---|
-| `octopus://api/llms.txt` | Markdown catalog of every Octopus REST endpoint, every step type, and the `Octopus.Action.*` property catalog (~350 KB). |
-| `octopus://api/capabilities` | Runtime introspection: server version, enabled toolsets, available tools, feature flags. |
+## Writes
 
-REST fallback for the catalog: `GET /api/experimental/llms.txt` (same content, but you have to fetch the whole thing). **Use `grep_llms_txt` with a pattern instead** when the MCP server is connected — it searches the catalog server-side and returns matching sections, saving most of the context budget.
+The OAuth consent page sets the session's access level. A **Read-only** session rejects every write; ask the user to reconnect with **Full access** rather than working around it.
 
-### Resource URIs returned by reads
+### Writes with a dedicated tool or contract
 
-`find_*` and similar tools return slim summaries with a `resourceUri` field. To fetch the full body:
-
-| URI shape | Returns |
-|---|---|
-| `octopus://spaces/{spaceName}/releases/{releaseId}` | Full release: notes, packages, build info, custom fields. |
-| `octopus://spaces/{spaceName}/runbooks/{runbookId}` | Full runbook: runtime policies, steps. |
-| `octopus://spaces/{spaceName}/tasks/{taskId}` | Lightweight task metadata: state, timing. |
-| `octopus://spaces/{spaceName}/tasks/{taskId}/details` | Full `ServerTaskDetails`: ActivityLogs tree, Progress. |
-| `octopus://spaces/{spaceName}/interruptions/{interruptionId}` | Full Form definition: control types, Markdown instructions, button options (Abort/Proceed), submitted Form.Values. |
-
-Dereference with `read_resource` (or the standard `resources/read` primitive in resource-aware clients). `read_resource` is the universal bridge — if you see an `octopus://` URI in any tool's response and don't know what to do with it, call `read_resource` with that URI.
-
-There is intentionally **no** `octopus://.../tasks/{id}/log` resource. Use `grep_task_log` instead — task logs can be multi-megabyte and inlining them as a resource would blow the context budget.
-
-### Writes — gated through elicitation
-
-Write tools require the MCP server to be running with `--no-read-only` (the default is read-only — keeps random read-only sessions from accidentally mutating state). Each write tool gates via `requireConfirmation`:
-
-1. The user can set `OCTOPUS_SKIP_ELICITATION=true` to bypass (for automation / CI). Strict string equality.
-2. If the client advertises elicitation capability, the SDK emits `elicitation/create` and the user gets a confirmation prompt.
-3. Otherwise, the tool surfaces a `confirm: boolean` field in its own input schema; the agent must set `confirm: true` after explicit user agreement.
-
-| MCP tool | Effect | REST equivalent |
+| MCP | Effect | REST equivalent |
 |---|---|---|
-| `create_release` | Additive — creates a new release record. | `POST /api/{sp}/releases` (or `POST /api/{sp}/releases/create/v1` for the by-name CI-friendly form). |
-| `deploy_release` | **Destructive** — mutates live state. Supports untenanted, single-tenant, and tenant-tag forms. | `POST /api/{sp}/deployments`. |
-| `run_runbook` | **Destructive** — runs operational automation. Supports prompted variables, guided failure, skip/include steps. | `POST /api/{sp}/runbookruns` (shape varies by runbook). |
-| `execute` | Universal HTTP escape hatch. Send any verb + path + body to any Octopus REST endpoint. **Non-GET calls are write-gated** through the same elicitation flow. | The thing it's executing. |
+| `execute_command` `create_environment` | Additive. | `POST /api/{sp}/environments` |
+| `execute_command` `create_project` | Additive. | `POST /api/{sp}/projects` |
+| `execute_command` `create_lifecycle` | Additive. | `POST /api/{sp}/lifecycles` |
+| `execute_command` `create_tag_set` | Additive. | `POST /api/{sp}/tagsets` |
+| `execute_command` `create_tenant` / `modify_tenant` | Additive / replace. | `POST` / `PUT /api/{sp}/tenants` |
+| `execute_command` `modify_tenant_project_variables` | Replace. | `POST /api/{sp}/tenants/{id}/projectvariables` |
+| `execute_command` `modify_project_variables_in_database` / `_in_git` | Replace. | `PUT /api/{sp}/variables/{id}` |
+| `execute_command` `create_project_trigger` | Additive. | `POST /api/{sp}/projecttriggers` |
+| `create_release` | Additive — creates a new release record. | `POST /api/{sp}/releases/create/v1` |
+| `deploy_release` / `deploy_release_for_tenants` | **Destructive** — mutates live state. | `POST /api/{sp}/deployments` |
+| `run_runbook_in_database` / `run_runbook_in_git` | **Destructive** — runs operational automation. | `POST /api/{sp}/runbookruns` |
 
-When you need to mutate state and there's no dedicated MCP tool (e.g., creating a feed, registering a target), **use `execute` rather than dropping out to raw HTTP** — the elicitation gate still applies, and the user keeps a single audit surface.
+### Writes with no contract
 
-### Toolset filtering
+These onboarding writes have no Remote MCP equivalent. Use REST with an API key, even when MCP is connected. Ask the user for an API key (Profile → My API Keys) the first time one of these is needed, and tell them which step needs it.
 
-The MCP server organizes tools into toolsets. The user can enable a subset via `--toolsets core,releases,deployments` on launch. Available toolsets:
+| Write | REST |
+|---|---|
+| Register a deployment target | `POST /api/{sp}/machines` |
+| Create a feed | `POST /api/{sp}/feeds` |
+| Create a cloud account | `POST /api/{sp}/accounts` |
+| Update the deployment process | `PUT /api/{sp}/projects/{id}/deploymentprocesses` |
+| Turn on multi-tenancy | `PUT /api/{sp}/featuresconfiguration` |
+| Push build information | `POST /api/{sp}/build-information` |
 
-`core` (always on), `projects`, `deployments`, `releases`, `runbooks`, `tasks`, `tenants`, `kubernetes`, `machines`, `certificates`, `accounts`, `interruptions`, `context`.
-
-If a tool you expect isn't in your tool list, the user's MCP server may have it filtered out — fall back to REST or `execute` for that one call rather than asking them to reconfigure.
+Before using REST for one of these, run `search_contracts` for it once; newer Octopus versions may have added a contract.
 
 ## Announcing writes
 
@@ -127,23 +114,21 @@ Per the *Announcing progress to the user* convention in `SKILL.md`, every write 
 
 | Call | Announcement |
 |---|---|
-| `execute({ resource: "environments", body: {...} })` succeeds | `✓ Created environment '<Name>': <Id>` |
-| `execute({ resource: "projects", body: {...} })` succeeds | `✓ Created project '<Name>': Projects-<id>` |
-| `execute({ verb: "PUT", path: "...projects/{id}/deploymentprocesses" })` succeeds | `✓ Updated deployment process for '<project>' (<N> steps)` |
-| `execute({ resource: "machines", body: {...} })` succeeds | `✓ Registered target '<Name>': Machines-<id>` |
+| `create_environment` succeeds | `✓ Created environment '<Name>': <Id>` |
+| `create_project` succeeds | `✓ Created project '<Name>': Projects-<id>` |
+| `PUT .../deploymentprocesses` succeeds | `✓ Updated deployment process for '<project>' (<N> steps)` |
+| `POST .../machines` succeeds | `✓ Registered target '<Name>': Machines-<id>` |
 | `create_release` succeeds | `✓ Created release <Version> for '<Project>': Releases-<id>` |
 | `deploy_release` invoked but *output-only* (snippet handed to user) | `→ Deploy command ready (waiting for you to run it)` |
-| `run_runbook` succeeds | `✓ Ran runbook '<Name>': RunbookRuns-<id>` |
+| `run_runbook_in_database` succeeds | `✓ Ran runbook '<Name>': RunbookRuns-<id>` |
 | Pre-existing object detected (matched by name in §0.0 resume) | `✓ Reused existing <resource> '<Name>': <Id>` |
 | 409 collision on retry of a known-name resource | `✓ Reused existing <resource> '<Name>': <Id>` (look up the ID first; don't surface the 409 as an error) |
 
-Surface the destructive call's intent **before** the elicitation prompt fires, so the user doesn't see the confirmation dialog cold. Pattern: announce what you're about to do in one line, let the elicitation prompt the user, then after success print the `✓` line.
+Announce what a destructive call will do in one line before making it, then print the `✓` line after it succeeds.
 
 ## Practical guidance
 
-- **Reads first, writes last.** Most onboarding is reads (list spaces, find projects, get deployment process, fetch llms.txt sections). Stay in MCP for everything read-shaped.
-- **Use `grep_llms_txt` for property lookups.** Don't read the whole catalog. Pattern: "what props does `Octopus.HelmChartUpgrade` take?" → `grep_llms_txt` with pattern `Octopus.HelmChartUpgrade` and follow the section.
-- **Use `grep_task_log` for failure diagnosis.** Don't dereference the full task details resource for log search.
-- **Use `execute` for writes that have no dedicated tool** — feed creation, target registration, variable sets, etc. Compose the body using shapes from `llms.txt`.
-- **Confirmation behaviour you should expect.** Every destructive call (`deploy_release`, `run_runbook`, non-GET `execute`) will pause for user confirmation unless `OCTOPUS_SKIP_ELICITATION=true` is set. Treat the pause as the user's last chance to bail — surface what you're about to do before triggering the call, so the elicitation prompt isn't the first time they see the action.
-- **REST fallback parity.** Every flow in `SKILL.md` works via raw REST too — the MCP layer is preferred but not required. If a user is testing in an environment where the MCP server isn't running, the same `POST /api/{sp}/...` call sequences from `SKILL.md` apply.
+- **Reads first, writes last.** Most onboarding is reads (find spaces, find projects, get deployment process). Stay in MCP for everything read-shaped.
+- **Use `get_server_task_log` for failure diagnosis.** Use `Mode: Search` instead of fetching full task details.
+- **Look up contracts instead of guessing.** `search_contracts` with a few keywords (for example `create feed`) is cheaper than a failed call.
+- **REST fallback parity.** Every flow in `SKILL.md` works via raw REST too. If the MCP server isn't connected, the same `POST /api/{sp}/...` call sequences from `SKILL.md` apply.

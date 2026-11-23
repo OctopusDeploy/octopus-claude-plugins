@@ -19,7 +19,7 @@ You MUST retrieve the step details if the failure is related to a specific step,
 
 Prefer to use Octopus MCP if available, falling back to the API as last resort.
 
-When the parent task log mentions child or sub-deployment failures (e.g. from 'Deploy a Release' steps), use GetChildServerTasks to discover child task IDs and their states. Then use GetServerTaskRaw on the failed child task(s) to retrieve the actual error details for diagnosis.
+When the parent task log mentions child or sub-deployment failures (e.g. from 'Deploy a Release' steps), use the `get_child_server_tasks` contract to discover child task IDs and their states. Then use the `get_server_task_log` contract on the failed child task(s) to retrieve the actual error details for diagnosis.
 
 Consider this when suggesting actions to fix a deployment: Releases in Octopus Deploy snapshot the deployment process and variables at the time of release creation. Changes made to the deployment process or variables after a release is created do not affect deployments of that release. In most cases, the user will have to create a new release to test their changes.
 

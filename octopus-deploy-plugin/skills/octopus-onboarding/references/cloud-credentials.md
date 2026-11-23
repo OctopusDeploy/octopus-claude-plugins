@@ -9,7 +9,7 @@ For any cloud, the order is:
 1. Determine the minimum-scope policy / role for the specific Octopus step types the user is about to run.
 2. Show the policy as a paste-ready block. Don't ask for keys yet.
 3. Offer OIDC by default where the cloud and Octopus version support it. Long-lived keys are the fallback, not the default.
-4. After `POST /api/{sp}/accounts` (MCP: `execute` with that path), call `GET /api/{sp}/accounts/{id}/usages` to demonstrate the scope is empty — nothing yet trusts this account. Reassures the user that even mistyped creds aren't dangerous yet.
+4. After `POST /api/{sp}/accounts` (REST only; no MCP contract), call `GET /api/{sp}/accounts/{id}/usages` (MCP: `execute_query` `get_account_usages`) to demonstrate the scope is empty — nothing yet trusts this account. Reassures the user that even mistyped creds aren't dangerous yet.
 
 ## Account types and `CommunicationStyle` mapping
 

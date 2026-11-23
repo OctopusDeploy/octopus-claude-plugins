@@ -36,7 +36,7 @@ kubectl run curl --rm -it --image=curlimages/curl -- -sv {agentReachableUrl}/api
 The server provisions a registration token when the target is created and Helm uses it to register the agent. So: create the target *first*, then run Helm.
 
 ```
-POST /api/{sp}/machines       (or MCP `execute` with the same body)
+POST /api/{sp}/machines       (REST only; no MCP contract)
 {
   "Name": "docker-desktop",
   "Slug": "docker-desktop",
@@ -64,7 +64,7 @@ GET (or POST per spec) /api/{sp}/machines/helm-upgrade-command   ← check the s
 → { RegistrationKey, ServerCommsAddress, Thumbprint, ... }
 ```
 
-Always cross-check the field names against `octopus://api/llms.txt` (or `GET /api/experimental/llms.txt`) before constructing the Helm command — endpoint shape evolves between versions.
+Always cross-check the field names against `GET /api/experimental/llms.txt` before constructing the Helm command — endpoint shape evolves between versions.
 
 ## Show the user the Helm command
 

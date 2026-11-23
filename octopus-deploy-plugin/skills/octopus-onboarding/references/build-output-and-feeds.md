@@ -100,7 +100,7 @@ The `FeedType` values from `CreateFeedCommand`:
 
 Register the feed:
 
-- **MCP**: `execute` with `POST /api/{sp}/feeds` (write-gated through elicitation).
+- **MCP**: no contract for creating a feed; use the REST call with an API key.
 - **REST**: `POST /api/{sp}/feeds` directly.
 
 Smoke-test with `GET /api/{sp}/feeds/{id}/packages/search?term=<image-or-package-name>`. Results = feed is live; `Unable to retrieve authentication token` = creds are wrong or missing (see "registry creds" below).

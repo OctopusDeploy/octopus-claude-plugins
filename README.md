@@ -8,7 +8,7 @@
 
 [Octopus](https://octopus.com) makes it easy to deliver software to Kubernetes, multi-cloud, on-prem infrastructure, and anywhere else. Automate the release, deployment, and operations of your software and AI workloads with a tool that can handle CD at scale in ways no other tool can.
 
-This plugin combines the power of the [Octopus MCP Server](https://github.com/OctopusDeploy/mcp-server) and a specialized set of skills to enable [Claude Code](https://claude.com/claude-code) to interact with Octopus Deploy in an automated fashion.
+This plugin combines the power of the [Octopus Remote MCP Server](https://octopus.com/docs/octopus-ai/mcp/remote) and a specialized set of skills to enable [Claude Code](https://claude.com/claude-code) to interact with Octopus Deploy in an automated fashion.
 
 The MCP connects directly to your Octopus instance and can perform most actions that a regular user can:
 - Create projects and deployment processes
@@ -36,23 +36,45 @@ In Claude Code:
 /plugin install octopus-deploy-devops
 ```
 
-### 2. Configure environment variables
+### 2. Requirements
 
-The plugin's MCP server connects to your Octopus instance using these environment variables. We recommend setting up a separate [service account](https://octopus.com/docs/security/users-and-teams/service-accounts) with restricted permissions per Space.
+- Octopus Server 2026.3 or later, reachable over HTTPS. OAuth sign-in needs Octopus Server 2026.4.9289 or later.
+- Remote MCP turned on in **Configuration > Settings > MCP Controls** (on by default).
+
+### 3. Set your Octopus Server URL
+
+The plugin connects to the Remote MCP Server at `$OCTOPUS_SERVER_URL/mcp`.
 
 **Unix/Mac (bash/zsh):**
 ```bash
 export OCTOPUS_SERVER_URL="https://your-instance.octopus.app"
-export OCTOPUS_API_KEY="API-XXXXXXXXXXXXX"
 ```
 
 **Windows (PowerShell):**
 ```powershell
 $env:OCTOPUS_SERVER_URL = "https://your-instance.octopus.app"
-$env:OCTOPUS_API_KEY = "API-XXXXXXXXXXXXX"
 ```
 
-Restart Claude Code after setting them so the MCP server picks them up.
+Don't include a trailing slash. Restart Claude Code after setting the variable.
+
+### 4. Sign in
+
+Run `/mcp` in Claude Code, select `plugin:octopus-deploy-devops:octopus-deploy-mcp`, and sign in through the browser with your Octopus user account. On the consent page, choose **Read-only** or **Full access**. To change the access level later, disconnect and sign in again. Sessions last up to 20 days.
+
+### Using an API key instead of OAuth
+
+Service accounts, the guest account, and Octopus Server versions without OAuth sign-in need an API key. Disable the plugin's MCP server in `/mcp`, then add the Remote MCP Server yourself with an [Agent API key](https://octopus.com/docs/octopus-ai/mcp/remote):
+
+```bash
+export OCTOPUS_API_KEY="API-XXXXXXXXXXXXX"
+claude mcp add --transport http octopus-deploy "$OCTOPUS_SERVER_URL/mcp" --header "X-Octopus-ApiKey: ${OCTOPUS_API_KEY}"
+```
+
+The skills work with either connection.
+
+### Migrating from the local MCP server
+
+Earlier versions of this plugin ran the deprecated [`@octopusdeploy/mcp-server`](https://github.com/OctopusDeploy/mcp-server) package with `OCTOPUS_API_KEY`. The plugin no longer reads `OCTOPUS_API_KEY`; you can remove it unless you use the API key setup above or the REST fallbacks in the onboarding skill.
 
 ## Examples
 
@@ -65,7 +87,7 @@ Here is an example of what you can do with this plugin:
 ## Resources
 
 - [Octopus Deploy Documentation](https://octopus.com/docs)
-- [Octopus Deploy MCP Server](https://github.com/OctopusDeploy/mcp-server)
+- [Octopus Remote MCP Server](https://octopus.com/docs/octopus-ai/mcp/remote)
 
 ## License
 
@@ -76,4 +98,3 @@ This plugin is maintained by Octopus Deploy.
 For issues or questions:
 - Plugin issues: [GitHub Issues](https://github.com/OctopusDeploy/octopus-claude-plugins/issues)
 - Octopus Deploy support: [Octopus Support](https://octopus.com/support)
-- MCP server issues: [MCP Server Issues](https://github.com/OctopusDeploy/mcp-server/issues)

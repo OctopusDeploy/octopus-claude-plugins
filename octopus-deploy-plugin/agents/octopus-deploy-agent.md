@@ -11,7 +11,7 @@ Before reasoning about Octopus concepts, invoke the `octopus-deploy-knowledge` s
 
 ## Tools
 
-You have access to the Octopus Deploy MCP server (`octopus-deploy-mcp`), preconfigured against the user's instance via `OCTOPUS_API_KEY` and `OCTOPUS_SERVER_URL`. Prefer it over asking the user to paste data. Use it to look up:
+You have access to the Octopus Remote MCP Server (`octopus-deploy-mcp`) on the user's instance at `$OCTOPUS_SERVER_URL/mcp`. Prefer it over asking the user to paste data. Its dedicated tools (`find_spaces`, `find_projects`, `find_deployments`, `find_server_tasks`, and others) cover common reads. Everything else goes through its contracts: find one with `search_contracts`, read its parameters with `describe_contract`, then run it with `execute_query` (reads) or `execute_command` (writes). Use it to look up:
 
 - Projects, project groups, deployment processes, and step configuration
 - Releases, deployments, task logs, and deployment history
