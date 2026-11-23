@@ -123,9 +123,9 @@ Enhance AI Assistant with organization-specific knowledge and procedures.
 | `Project.Deployment[0].Prompt` | Why did the deployment fail? |
 | `Project.Deployment[0].SystemPrompt` | If Azure resource group not found, find responsible team in project description and instruct to create support ticket via team Slack workflow. |
 
-### 2. Octopus MCP Server
+### 2. Octopus Remote MCP Server
 
-Model Context Protocol (MCP) server enabling AI assistants to interact directly with Octopus Deploy.
+Model Context Protocol (MCP) server built into Octopus Server, enabling AI assistants to interact directly with Octopus Deploy at `https://your-octopus-instance.com/mcp`.
 
 #### What is MCP?
 
@@ -139,30 +139,29 @@ Model Context Protocol (MCP) server enabling AI assistants to interact directly 
 - **Orchestration**: Combine with other MCP servers for complex workflows
 - **Flexibility**: Integrate into existing AI workflows
 
-#### Installation
+#### Connecting
 
 **Requirements:**
-- Node.js >= v20.0.0
-- Octopus Deploy instance accessible via HTTPS
-- Octopus Deploy API Key
+- Octopus Server 2026.3 or later, accessible via HTTPS
+- Remote MCP turned on in **Configuration > Settings > MCP Controls** (on by default)
+- OAuth sign-in needs Octopus Server 2026.4.9289 or later; otherwise use an Agent API key
 
-**Configuration (Claude Desktop/Code/Cursor):**
-```json
-{
-  "mcpServers": {
-    "octopusdeploy": {
-      "command": "npx",
-      "args": ["-y", "@octopusdeploy/mcp-server", "--api-key", "YOUR_API_KEY", "--server-url", "https://your-octopus.com"]
-    }
-  }
-}
-```
-
-**Environment Variables Alternative:**
+**Claude Code with OAuth:**
 ```bash
-OCTOPUS_API_KEY=API-KEY
-OCTOPUS_SERVER_URL=https://your-octopus.com
+claude mcp add --transport http octopus-deploy --scope user https://your-octopus-instance.com/mcp
+claude mcp login octopus-deploy
 ```
+
+Users sign in through the browser and choose **Read-only** or **Full access** on the consent page. Service accounts and the guest account can't use OAuth.
+
+**Claude Code with an Agent API key:**
+```bash
+claude mcp add --transport http octopus-deploy https://your-octopus-instance.com/mcp --header "X-Octopus-ApiKey: ${OCTOPUS_API_KEY}"
+```
+
+**Tools:** dedicated tools such as `find_spaces`, `find_projects`, `find_deployments`, `create_release`, and `deploy_release`, plus contract tools (`search_contracts`, `describe_contract`, `execute_query`, `execute_command`) that reach the rest of the AI-enabled API.
+
+The local `@octopusdeploy/mcp-server` npm package is deprecated in favor of the Remote MCP Server. See the [Remote MCP Server documentation](https://octopus.com/docs/octopus-ai/mcp/remote).
 
 #### MCP Use Cases
 
@@ -248,7 +247,7 @@ Recovery Agent helps achieve short mean time to recovery (MTTR) - a hallmark of 
 ### Open Source Transparency
 
 - AI Assistant backend: [GitHub - OctopusCopilot](https://github.com/OctopusSolutionsEngineering/OctopusCopilot)
-- MCP Server: [GitHub - mcp-server](https://github.com/OctopusDeploy/mcp-server)
+- Remote MCP Server: [Documentation](https://octopus.com/docs/octopus-ai/mcp/remote)
 - Independent security audit available via [Trust Center](https://trust.octopus.com/)
 
 ## Pricing
@@ -265,10 +264,10 @@ Recovery Agent helps achieve short mean time to recovery (MTTR) - a hallmark of 
 3. Open AI Assistant from interface
 4. Start with suggested prompts
 
-### MCP Server
-1. Install Node.js >= v20.0.0
-2. Configure MCP client with Octopus credentials
-3. Use with Claude Desktop, Claude Code, or other MCP clients
+### Remote MCP Server
+1. Confirm Remote MCP is turned on in **Configuration > Settings > MCP Controls**
+2. Add `https://your-octopus-instance.com/mcp` to your MCP client
+3. Sign in with OAuth, or send an Agent API key in the `X-Octopus-ApiKey` header
 
 ### Recovery Agent (Cloud)
 1. Enabled by default for Cloud customers

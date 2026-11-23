@@ -2,14 +2,13 @@
 
 Companion reference for `SKILL.md` (`octopus-onboarding`) §3. Use this when picking an `ActionType` for a deployment process step, or when you need a full end-to-end call sequence to follow.
 
-The deployment process is registered with `PUT /api/{sp}/projects/{id}/deploymentprocesses` (or via MCP `execute` with the same body). For Config-as-Code projects, use `?gitRef=<branch>` to write to a specific branch — but this skill assumes database-backed projects unless the user opts into Git mid-onboarding (see `SKILL.md` §3C).
+The deployment process is registered with `PUT /api/{sp}/projects/{id}/deploymentprocesses` (REST only — the Remote MCP Server has no contract for writing a deployment process; use an API key). For Config-as-Code projects, use `?gitRef=<branch>` to write to a specific branch — but this skill assumes database-backed projects unless the user opts into Git mid-onboarding (see `SKILL.md` §3C).
 
 ## Picking an `ActionType`
 
 For the property catalog of every action type (`Octopus.Action.*` keys with required/optional flags, defaults, enum values), grep the API spec — never invent keys:
 
-- **MCP**: `grep_llms_txt` with pattern matching the action type, e.g. `Octopus.HelmChartUpgrade`, `Octopus.KubernetesDeployRawYaml`.
-- **REST**: search `/api/experimental/llms.txt` for the same pattern in the `## Steps` section.
+- Search `/api/experimental/llms.txt` for the action type, e.g. `Octopus.HelmChartUpgrade`, `Octopus.KubernetesDeployRawYaml`, in the `## Steps` section.
 
 ### Kubernetes — prefer manifest-based steps
 
@@ -78,7 +77,7 @@ Returns specific warnings about missing variables, bad tag references, or missin
 
 ## Worked example: "deploy my project in the current repo to two tenants via Kubernetes"
 
-Full end-to-end call sequence. Italic lines are agent-to-user text. Both transports work — MCP-tool names are noted alongside the REST endpoints.
+Full end-to-end call sequence. Italic lines are agent-to-user text. Both transports work — MCP tool and contract names are noted alongside the REST endpoints. Steps shown only as REST have no MCP contract and need an API key even when MCP is connected.
 
 ### Phase 1: repo inspection (silent)
 
@@ -99,13 +98,13 @@ Full end-to-end call sequence. Italic lines are agent-to-user text. Both transpo
 1.  Establish serverUrl and agentReachableUrl (SKILL.md §0.1).
     Validate cluster → agentReachableUrl reachability.
 
-2.  list_spaces            (REST: GET /api/spaces/all)
+2.  find_spaces            (REST: GET /api/spaces/all)
     → pick Spaces-1
 
-3.  list_environments      (REST: GET /api/Spaces-1/environments/all)
-    → if empty, execute POST /api/Spaces-1/environments { Name: "Production" }
+3.  find_environments      (REST: GET /api/Spaces-1/environments/all)
+    → if empty, create_environment (REST: POST /api/Spaces-1/environments) { Name: "Production" }
 
-4.  execute POST /api/Spaces-1/machines   (pre-create the agent target; Unknown state)
+4.  POST /api/Spaces-1/machines   (pre-create the agent target; Unknown state)
     {
       Name: "prod-cluster",
       Slug: "prod-cluster",
@@ -129,7 +128,7 @@ Full end-to-end call sequence. Italic lines are agent-to-user text. Both transpo
     Wait: poll find_deployment_targets (or GET /api/Spaces-1/machines/Machines-1)
           until HealthStatus == "Healthy".
 
-6.  execute POST /api/Spaces-1/feeds   (Model A — pull from GHCR)
+6.  POST /api/Spaces-1/feeds   (Model A — pull from GHCR)
     {
       Name: "GHCR - acme",
       Slug: "ghcr-acme",
@@ -145,16 +144,16 @@ Full end-to-end call sequence. Italic lines are agent-to-user text. Both transpo
 7.  GET /api/Spaces-1/tenants/status
     → if multi-tenancy disabled, enable it:
       GET  /api/Spaces-1/featuresconfiguration            // round-trip the body
-      execute PUT /api/Spaces-1/featuresconfiguration { ...prev, IsMultiTenancyEnabled: true }
+      PUT /api/Spaces-1/featuresconfiguration { ...prev, IsMultiTenancyEnabled: true }
 
-8.  execute POST /api/Spaces-1/tagsets
+8.  create_tag_set (REST: POST /api/Spaces-1/tagsets)
     { Name: "Customer", Tags: [{Name: "tenant-a"}, {Name: "tenant-b"}] }
 
-9.  execute POST /api/Spaces-1/tenants × 2
+9.  create_tenant × 2 (REST: POST /api/Spaces-1/tenants)
     { Name: "Tenant A", TenantTags: ["Customer/tenant-a"], ProjectEnvironments: {} }
     { Name: "Tenant B", TenantTags: ["Customer/tenant-b"], ProjectEnvironments: {} }
 
-10. execute POST /api/Spaces-1/projects
+10. create_project (REST: POST /api/Spaces-1/projects)
     {
       Name: "payments",
       ProjectGroupId: "ProjectGroups-1",
@@ -163,11 +162,11 @@ Full end-to-end call sequence. Italic lines are agent-to-user text. Both transpo
     }
     → Projects-1
 
-11. execute PUT /api/Spaces-1/tenants/Tenants-{1,2}
+11. modify_tenant (REST: PUT /api/Spaces-1/tenants/Tenants-{1,2})
     ProjectEnvironments: { "Projects-1": ["Environments-1"] }
     (round-trip the tenant body — PUT is replace, not patch; see error-recovery.md)
 
-12. execute PUT /api/Spaces-1/projects/Projects-1/deploymentprocesses
+12. PUT /api/Spaces-1/projects/Projects-1/deploymentprocesses
     Prefer Helm because Chart.yaml is in the repo:
     {
       Steps: [{
@@ -198,10 +197,10 @@ Full end-to-end call sequence. Italic lines are agent-to-user text. Both transpo
      Octopus.Action.KubernetesContainers.CustomResourceYamlFileName = "manifests/**/*.yaml"
      and Octopus.Action.Script.ScriptSource = "GitRepository".)
 
-13. execute POST /api/Spaces-1/tenants/Tenants-{1,2}/projectvariables
+13. modify_tenant_project_variables (REST: POST /api/Spaces-1/tenants/Tenants-{1,2}/projectvariables)
     per-tenant overrides (namespace, replica count, secrets)
 
-14. (optional) execute POST /api/Spaces-1/projects/Projects-1/triggers
+14. (optional) create_project_trigger (REST: POST /api/Spaces-1/projects/Projects-1/triggers)
     FeedTrigger that auto-creates a release when a new GHCR tag appears.
     Explain before enabling.
 
@@ -212,9 +211,9 @@ Full end-to-end call sequence. Italic lines are agent-to-user text. Both transpo
                            PackageReferenceName: "",
                            Version: "<chart version>" }] }
     → Releases-1
-    (Gates via elicitation if MCP. User confirms.)
+    (Announce it first. User confirms.)
 
-16. (optional) execute POST /api/Spaces-1/build-information
+16. (optional) POST /api/Spaces-1/build-information
     attach CI run URL, commit list, work items
 
 17. Show the user (do NOT auto-run):

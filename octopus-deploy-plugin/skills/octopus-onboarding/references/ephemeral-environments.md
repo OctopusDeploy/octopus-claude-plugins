@@ -20,7 +20,7 @@ Four resources, in this order.
 ### 1. The Preview environment
 
 ```
-POST /api/{sp}/environments      (or MCP `execute` with resource "environments")
+POST /api/{sp}/environments      (or MCP `execute_command` `create_environment`)
 {
   "Name": "Preview",
   "Slug": "preview",

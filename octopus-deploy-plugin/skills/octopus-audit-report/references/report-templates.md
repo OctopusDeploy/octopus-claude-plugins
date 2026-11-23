@@ -20,7 +20,7 @@ Open with:
 - Space name and ID
 - Window in ISO 8601 (`from` / `to`) and the equivalent calendar duration
 - Generation timestamp
-- Event count, with the pre-suppression count called out if `includeInternalEvents: false` filtered anything
+- Event count, with the pre-suppression count called out if `IncludeInternalEvents: false` filtered anything
 
 Break the events down by group:
 
@@ -86,11 +86,11 @@ Open with a counts table grouped by document type:
 | `Deployments-` | n | n | n |
 | `Environments-` | n | n | n |
 
-For the changes that matter — typically variable updates, deployment-process edits, and channel or lifecycle changes — re-fetch each event by `eventId` with `excludeDifference: false` and quote the relevant slice of `ChangeDetails.Differences` in a code block. Keep the quoted slice tight; the full document context can run long.
+For the changes that matter — typically variable updates, deployment-process edits, and channel or lifecycle changes — re-fetch each event by `EventId` with `ExcludeDifference: false` and quote the relevant slice of `ChangeDetails.Differences` in a code block. Keep the quoted slice tight; the full document context can run long.
 
 Follow with a deployments-in-window table covering every `DeploymentSucceeded`, `DeploymentFailed`, and `DeploymentQueued`, with project, environment, release, and outcome columns.
 
-If interruptions are in scope, list every `Interruption` group event with a pointer to the associated task. For the full approval payload, follow up with `find_interruptions`.
+If interruptions are in scope, list every `Interruption` group event with a pointer to the associated task. For the full approval payload, follow up with the `find_interruptions` contract through `execute_query`.
 
 ## Framework mappings
 

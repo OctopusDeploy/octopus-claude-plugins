@@ -1,6 +1,6 @@
 ---
 name: octopus-onboarding
-description: Guides a user through their first Octopus Deploy setup — connecting a code repository, registering a deployment target (Kubernetes, Azure App Service, AWS ECS, Lambda, on-prem Tentacle, etc.), wiring up packages from their existing CI, and reaching their first real deployment. Prefers the Octopus MCP server's tools and resources when connected, and falls back to direct Octopus REST API calls when not. Trigger on "set up Octopus", "deploy my service", "connect my repo to Octopus", "first Octopus deployment", "Octopus project setup", "onboard to Octopus", "configure Octopus deployments", or any conversation where a user has Octopus credentials in hand and wants to stand up a working deployment from scratch — even if they don't use those exact phrases.
+description: Guides a user through their first Octopus Deploy setup — connecting a code repository, registering a deployment target (Kubernetes, Azure App Service, AWS ECS, Lambda, on-prem Tentacle, etc.), wiring up packages from their existing CI, and reaching their first real deployment. Prefers the Octopus Remote MCP Server's tools when connected, and falls back to direct Octopus REST API calls when not. Trigger on "set up Octopus", "deploy my service", "connect my repo to Octopus", "first Octopus deployment", "Octopus project setup", "onboard to Octopus", "configure Octopus deployments", or any conversation where a user has Octopus credentials in hand and wants to stand up a working deployment from scratch — even if they don't use those exact phrases.
 ---
 
 # Octopus onboarding
@@ -21,7 +21,7 @@ Vocabulary is a known landmine — *tenant*, *space*, *channel*, *runbook*, *lif
 
 ### 0.0 Are you resuming a prior session?
 
-If the user has run this skill against this space before, don't 409 on collisions. Before creating anything, check `list_projects`, `list_environments`, `find_deployment_targets`, and the feed list for objects with matching names; treat each pre-existing match as `✓ Reused existing …` (see *Announcing progress to the user* below). The PLAN summary (§0.8) must distinguish new resources from reused ones. Octopus state — not a local cache file — is the source of truth.
+If the user has run this skill against this space before, don't 409 on collisions. Before creating anything, check `find_projects`, `find_environments`, `find_deployment_targets`, and the feed list for objects with matching names; treat each pre-existing match as `✓ Reused existing …` (see *Announcing progress to the user* below). The PLAN summary (§0.8) must distinguish new resources from reused ones. Octopus state — not a local cache file — is the source of truth.
 
 ### 0.1 Establish two server URLs
 
@@ -38,28 +38,29 @@ Record both. Call them `serverUrl` (yours) and `agentReachableUrl` (the target's
 
 ### 0.2 Detect transport — MCP or direct REST?
 
-The user may have the official Octopus MCP server connected (tools named `list_spaces`, `find_releases`, `create_release`, `deploy_release`, `run_runbook`, `grep_llms_txt`, `read_resource`, `execute`, etc.; resources under `octopus://...`). If they do, **prefer it** — every read in this skill has a tighter, validated MCP equivalent, and writes are gated through the elicitation flow rather than raw HTTP.
+The user may have the Octopus Remote MCP Server connected (tools named `find_spaces`, `find_projects`, `create_release`, `deploy_release`, `search_contracts`, `describe_contract`, `execute_query`, `execute_command`, etc.). If they do, **prefer it** for reads and for every write that has a dedicated tool or command contract.
 
 If the MCP server isn't connected, fall back to direct REST with `X-Octopus-ApiKey: <key>` in the header. The user must have an API key (Profile → My API Keys in the Octopus UI).
 
-Detection heuristic: if you see an `octopus-deploy-mcp` (or similarly named) server in your tool list with `list_spaces` exposed, it's connected. Otherwise, REST.
+Some onboarding writes — registering a target, creating a feed or account, and updating the deployment process — have no MCP contract and need REST with an API key even when MCP is connected. Ask for the key when the first of those steps comes up, not at the start.
 
-The full MCP-tool-to-REST-endpoint cross reference, including which tools require `--no-read-only` and which gate via elicitation, is in `references/mcp-and-api.md`. Read that file once at the start of an onboarding session.
+Detection heuristic: if you see an `octopus-deploy-mcp` (or similarly named) server in your tool list with `find_spaces` exposed, it's connected. Otherwise, REST.
+
+The full MCP-to-REST cross reference, including which writes need REST, is in `references/mcp-and-api.md`. Read that file once at the start of an onboarding session.
 
 ### 0.3 Load the API spec
 
 Octopus exposes a markdown catalog of every REST endpoint, every step type, and the full `Octopus.Action.*` property catalog. Treat this as the source of truth — **never invent property keys; always look them up**.
 
-- **MCP path**: dereference `octopus://api/llms.txt` via `read_resource` (or `resources/read`). For targeted lookups (e.g., "what properties does `Octopus.HelmChartUpgrade` take?"), use `grep_llms_txt` with a pattern — the catalog is ~350 KB and a full read wastes context.
-- **REST fallback**: `GET {serverUrl}/api/experimental/llms.txt` with the API key header.
+`GET {serverUrl}/api/experimental/llms.txt` with the API key header. The catalog is around 350 KB; save it to a file and search it for the pattern you need (e.g., `Octopus.HelmChartUpgrade`) rather than reading it whole.
 
-Also useful via MCP only: `octopus://api/capabilities` reports the running Octopus version, enabled toolsets, and feature flags. Check it once if you suspect a version mismatch (e.g., `get_kubernetes_live_status` requires Octopus 2025.3+).
+For MCP contract shapes, use `describe_contract` instead.
 
 ### 0.4 Pick a space
 
 A *space* is a tenancy boundary inside an Octopus install — call it a "workspace" when talking to the user. If they only have one, use it silently and don't mention spaces at all.
 
-- **MCP**: `list_spaces` → pick the `Id` (`Spaces-1`).
+- **MCP**: `find_spaces` → pick the `Id` (`Spaces-1`).
 - **REST**: `GET /api/spaces/all`.
 
 If the user has several, ask only by display name (*"Which workspace — Default, Payments, or Data Platform?"*). Never ask the user to type a space ID.
@@ -190,7 +191,7 @@ Three behavioural conventions, applied from this point forward across every stag
   - `✓ Reused existing environment 'Production': Environments-1`
   - `✓ Created release 1.4.0 for 'checkout-api': Releases-87`
   - `→ Deploy command ready (waiting for you to run it)` for output-only steps that don't auto-fire.
-- **No silent writes.** Every `POST` / `PUT` / `execute` / `create_release` / `run_runbook` write call must be followed by a confirmation line. Reads (`GET`, `list_*`, `find_*`, `read_resource`) stay silent.
+- **No silent writes.** Every `POST` / `PUT` / `execute_command` / `create_release` / `deploy_release` / `run_runbook_in_*` write call must be followed by a confirmation line. Reads (`GET`, `find_*`, `get_*`, `execute_query`) stay silent.
 
 This convention layers *on top of* the existing posture in §5 — it doesn't replace the conversational tone of §1 Step A's "Orient" sentence, and it doesn't make `register-target` any less guided. It just makes the agent's actions legible to the user.
 
@@ -419,4 +420,4 @@ Exception: **ephemeral preview environments are explicitly offered**, not deferr
 | API errors and the `PUT`-is-replace rule | `references/error-recovery.md` |
 | Ephemeral preview environments for PRs (Preview env + teardown runbook + CI snippet) | `references/ephemeral-environments.md` |
 
-For full command bodies and the step-type catalog, **always** consult `octopus://api/llms.txt` (via MCP `read_resource` or `grep_llms_txt`) or the REST equivalent `GET /api/experimental/llms.txt`. Don't guess.
+For full command bodies and the step-type catalog, **always** consult `GET /api/experimental/llms.txt`, or `describe_contract` for MCP contracts. Don't guess.
