@@ -76,6 +76,19 @@ The skills work with either connection.
 
 Earlier versions of this plugin ran the deprecated [`@octopusdeploy/mcp-server`](https://github.com/OctopusDeploy/mcp-server) package with `OCTOPUS_API_KEY`. The plugin no longer reads `OCTOPUS_API_KEY`; you can remove it unless you use the API key setup above or the REST fallbacks in the onboarding skill.
 
+### Octopus Server older than 2026.3
+
+Older versions don't have the Remote MCP Server. Check your version with `curl "$OCTOPUS_SERVER_URL/api"` (the `Version` field). On an older server, disable the plugin's MCP server in `/mcp`, then add the deprecated local MCP server yourself. It needs Node.js 20 or later.
+
+```bash
+claude mcp add octopus-deploy \
+  --env OCTOPUS_SERVER_URL="https://your-instance.example.com" \
+  --env OCTOPUS_API_KEY="API-XXXXXXXXXXXXX" \
+  -- npx -y @octopusdeploy/mcp-server
+```
+
+The skills are written for the Remote MCP Server's tools. The local server's tools have different names (for example `list_spaces` instead of `find_spaces`), so the onboarding skill doesn't detect it and uses REST with your API key instead.
+
 ## Examples
 
 Here is an example of what you can do with this plugin:
